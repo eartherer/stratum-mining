@@ -119,6 +119,58 @@ class MiningService(GenericService):
 
         return True
 
+    def submitfull(self, worker_name, job_id, extranonce1, extranonce2, coinbase_address, ntime, nonce):
+        '''Try to solve block candidate using a provided full coinbase 
+        transaction, regardless if the submitter is subscribed for mining.
+        This allows the submitter to use our server as a publication point 
+        for blocks using our server's block templates but without sharing 
+        revenue with the pool. Needs to be enabled by a switch in config.py.'''
+
+        session = self.connection_ref().get_session()
+        session.setdefault('authorized', {})
+
+        # Check if worker is authorized to submit shares --  delete this?
+        #if not Interfaces.worker_manager.authorize(worker_name,
+        #                session['authorized'].get(worker_name)):
+        #    raise SubmitException("Worker is not authorized")
+
+        # Check if extranonce1 is in connection session -- unnecessary
+        #extranonce1_bin = session.get('extranonce1', None)
+        #if not extranonce1_bin:
+        #    raise SubmitException("Connection is not subscribed for mining")
+
+        extranonce1_bin = binascii.unhexlify(extranonce1)
+
+
+        difficulty = session['difficulty']
+        submit_time = Interfaces.timestamper.time()
+
+        Interfaces.share_limiter.submit(self.connection_ref, difficulty, submit_time)
+
+        # This checks if submitted share meet all requirements
+        # and it is valid proof of work.
+        try:
+            (block_header, block_hash, on_submit) = Interfaces.template_registry.submit_share(job_id,
+                                                worker_name, extranonce1_bin, extranonce2, ntime, nonce, difficulty, address=coinbase_address)
+        except SubmitException:
+            # block_header and block_hash are None when submitted data are corrupted
+            Interfaces.share_manager.on_submit_share(worker_name, None, None, difficulty,
+                                                 submit_time, False)
+            raise
+
+
+        Interfaces.share_manager.on_submit_share(worker_name, block_header, block_hash, difficulty,
+                                                 submit_time, True)
+
+        if on_submit != None:
+            # Pool performs submitblock() to bitcoind. Let's hook
+            # to result and report it to share manager
+            on_submit.addCallback(Interfaces.share_manager.on_submit_block,
+                        worker_name, block_header, block_hash, submit_time)
+
+        return True
+
+
     # Service documentation for remote discovery
     update_block.help_text = "Notify Stratum server about new block on the network."
     update_block.params = [('password', 'string', 'Administrator password'),]

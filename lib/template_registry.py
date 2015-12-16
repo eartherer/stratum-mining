@@ -2,6 +2,7 @@ import weakref
 import binascii
 import util
 import StringIO
+import copy
 
 from twisted.internet import defer
 from lib.exceptions import SubmitException
@@ -162,7 +163,7 @@ class TemplateRegistry(object):
         return j
 
     def submit_share(self, job_id, worker_name, extranonce1_bin, extranonce2, ntime, nonce,
-                     difficulty):
+                     difficulty, address=None):
         '''Check parameters and finalize block template. If it leads
            to valid block candidate, asynchronously submits the block
            back to the bitcoin network.
@@ -206,6 +207,14 @@ class TemplateRegistry(object):
 
         # Now let's do the hard work!
         # ---------------------------
+
+        # 0. Make a copy of the job if this is a submitfull()
+        #    and change the coinbase address
+
+        if address:
+            oldjob = job
+            job = copy.deepcopy(job)
+            job
 
         # 1. Build coinbase
         coinbase_bin = job.serialize_coinbase(extranonce1_bin, extranonce2_bin)
