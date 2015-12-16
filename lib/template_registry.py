@@ -209,12 +209,16 @@ class TemplateRegistry(object):
         # ---------------------------
 
         # 0. Make a copy of the job if this is a submitfull()
-        #    and change the coinbase address
+        #    and change the coinbase address. We make a copy first
+        #    because we don't want to ruin this job for regular
+        #    submit() users
 
         if address:
             oldjob = job
             job = copy.deepcopy(job)
-            job
+            job.vtx[0].address = address
+            # we know it's not our own address, and we don't care
+            job.vtx[0].is_valid = True
 
         # 1. Build coinbase
         coinbase_bin = job.serialize_coinbase(extranonce1_bin, extranonce2_bin)
